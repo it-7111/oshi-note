@@ -4,7 +4,7 @@ import { esc, today, addDays, addMonths, parseYmd, ymd, fmtMD, WD, weekday, toMi
 import { openModal, closeModal, toast, formValues, field, input, select } from '../ui.js';
 import { openLiveEditor } from './lives.js';
 import { liveSteps, archiveExpiry, watchedSet } from '../plans.js';
-import { mountInk, gridMapping, toolbarHtml, bindToolbar } from '../ink.js';
+import { mountInk, gridMapping, toolbarHtml, bindToolbar, onToolChange } from '../ink.js';
 import { weekKey, monthKey, hasMemo, isWide, memoPanelHtml, bindMemoPanel, openMemoViewer } from '../memo.js';
 
 // 1時間の高さ。iPadでは画面の高さに合わせて、時間軸に16時間分が収まるようにする
@@ -190,6 +190,7 @@ export function renderCalendar(main, ctx) {
 
   if (wide) {
     bindToolbar(main, () => ctx.rerender());
+    onToolChange((kind) => { toast(kind === 'eraser' ? '🧽 消しゴム' : '🖊 ペン'); ctx.rerender(); });
     bindMemoPanel(main, true);
   } else {
     main.querySelector('[data-memo-open]').onclick = () => openMemoViewer(memos);

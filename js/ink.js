@@ -17,17 +17,32 @@ export const INK_COLORS = ['#1f1a2e', '#e11d48', '#2563eb', '#16a34a', '#a21caf'
 export const SIZES = { pen: [1.2, 2, 3, 4.5, 7], marker: [8, 12, 18, 26], eraser: [6, 12, 22, 36] };
 const Q = 10; // 保存時の倍率（基準単位の1/10まで残す）
 
-export const tool = { mode: false, kind: 'pen', color: INK_COLORS[0], finger: false, size: { pen: 1, marker: 1, eraser: 1 }, eraseWhole: false };
+export const tool = { kind: 'pen', color: INK_COLORS[0], finger: false, size: { pen: 1, marker: 1, eraser: 1 }, eraseWhole: false };
 try {
   const saved = JSON.parse(localStorage.getItem('ink-tool') || '{}');
-  Object.assign(tool, saved, { mode: false, size: { ...tool.size, ...(saved.size || {}) } });
+  Object.assign(tool, saved, { size: { ...tool.size, ...(saved.size || {}) } });
+  delete tool.mode;
 } catch { /* 既定値 */ }
-const saveTool = () => { try { const { mode, ...t } = tool; localStorage.setItem('ink-tool', JSON.stringify(t)); } catch { /* 無視 */ } };
+const saveTool = () => { try { localStorage.setItem('ink-tool', JSON.stringify(tool)); } catch { /* 無視 */ } };
 const sizeKeyOf = (k) => (k === 'eraser' ? 'eraser' : k === 'marker' ? 'marker' : 'pen');
 const curWidth = () => SIZES[sizeKeyOf(tool.kind)][tool.size[sizeKeyOf(tool.kind)]] ?? 2;
 const eraserR = () => SIZES.eraser[tool.size.eraser] ?? 12;
 
 let drawingCount = 0;
+let lastPenAt = 0;
+const LONG_PRESS_MS = 550;
+
+let toolChangeListener = () => {};
+/** 長押しで道具が切り替わったときに道具バーを描き直すための通知先 */
+export const onToolChange = (fn) => { toolChangeListener = fn; };
+const notifyToolChange = () => toolChangeListener(tool.kind);
+let penKindBeforeEraser = 'pen';
+function toggleEraser() {
+  if (tool.kind === 'eraser') tool.kind = penKindBeforeEraser;
+  else { penKindBeforeEraser = tool.kind; tool.kind = 'eraser'; }
+  saveTool();
+  navigator.vibrate?.(15);
+}
 /** 書いている最中か（同期による再描画で線が途切れないようにする） */
 export const isDrawing = () => drawingCount > 0;
 
@@ -273,48 +288,64 @@ export function mountInk(canvas, mappingFn, { editable = false, minHeightPx = 0 
   mounts.add(m);
   new ResizeObserver(() => redraw()).observe(canvas);
   redraw();
-  const drawing = editable && tool.mode;
-  canvas.classList.toggle('drawing', drawing);
-  liveCv.classList.toggle('drawing', drawing);
-  if (!drawing) return m;
+  // 指で書くときだけ上の層がタッチを受ける。Pencilは手書きボタンなしで、いつでも書ける
+  const fingerDraw = editable && tool.finger;
+  liveCv.classList.toggle('drawing', fingerDraw);
+  if (!editable) return m;
 
-  // ここから書く処理。イベントは上の層（liveCv）で受ける
-  const target = liveCv;
-  target.style.touchAction = 'none';
+  // ここから書く処理。Pencilの入力は、下にある予定やボタンより先に（キャプチャ段階で）受け取る
+  const host = canvas.parentElement;
   let rect = null;
   let active = null;
-  let pts = [];      // 書き途中の点（px＋筆圧）
-  let lastPen = 0;   // 最後にペンを使った時刻（手のひらの誤反応よけ）
-  let scroll = null; // 指でのスクロール
+  let pts = [];       // 書き途中の点（px＋筆圧）
+  let downAt = 0;
+  let downXY = null;
+  let longTimer = 0;  // 長押しでペン↔消しゴム
+  let switched = false;
 
-  const blockTouch = (e) => e.preventDefault(); // iOSのスクロール・拡大鏡・選択を出さない
-  target.addEventListener('touchstart', blockTouch, { passive: false });
-  target.addEventListener('touchmove', blockTouch, { passive: false });
+  const usesPen = (e) => e.pointerType === 'pen' || (tool.finger && (e.pointerType === 'touch' || e.pointerType === 'mouse'));
+  const inside = (e) => { const r = liveCv.getBoundingClientRect(); return e.clientX >= r.left && e.clientX <= r.right && e.clientY >= r.top && e.clientY <= r.bottom; };
+  const xy = (e) => [e.clientX - rect.left, e.clientY - rect.top, e.pointerType === 'pen' ? e.pressure : 0.5];
 
-  const isPenLike = (e) => e.pointerType === 'pen' || e.pointerType === 'mouse' || (tool.finger && e.pointerType === 'touch');
-  const xy = (e) => [e.clientX - rect.left, e.clientY - rect.top, e.pointerType === 'mouse' ? 0.5 : e.pressure];
+  // Pencilでスクロール・拡大鏡・選択が起きないようにし、書いている間とその直後は手のひらのタッチも止める
+  const guardTouch = (e) => {
+    const stylus = [...e.touches].some((t) => t.touchType === 'stylus');
+    if (stylus || active !== null || Date.now() - lastPenAt < 500 || (tool.finger && inside(e.touches[0] || e.changedTouches[0]))) e.preventDefault();
+  };
+  host.addEventListener('touchstart', guardTouch, { passive: false });
+  host.addEventListener('touchmove', guardTouch, { passive: false });
 
-  target.addEventListener('pointerdown', (e) => {
-    if (active !== null || scroll) return;
-    if (!isPenLike(e)) {
-      if (Date.now() - lastPen < 600) return; // ペンを使った直後の指は手のひらとみなす
-      startScroll(e);
-      return;
-    }
+  host.addEventListener('pointerdown', (e) => {
+    if (!usesPen(e) || !inside(e)) return;
     e.preventDefault();
-    try { target.setPointerCapture(e.pointerId); } catch { /* なくても書ける */ }
+    e.stopPropagation();
+    if (active !== null) return;
+    liveCv.style.pointerEvents = 'auto';
+    try { liveCv.setPointerCapture(e.pointerId); } catch { /* なくても書ける */ }
     active = e.pointerId;
     drawingCount++;
-    rect = target.getBoundingClientRect();
+    lastPenAt = Date.now();
+    rect = liveCv.getBoundingClientRect();
+    downAt = Date.now();
+    downXY = [e.clientX, e.clientY];
+    switched = false;
+    clearTimeout(longTimer);
+    longTimer = setTimeout(() => { // 動かさずに長押し → ペンと消しゴムを切り替える
+      if (active === null) return;
+      switched = true;
+      toggleEraser();
+      pts = [];
+      live.clearRect(0, 0, liveCv.clientWidth, liveCv.clientHeight);
+    }, LONG_PRESS_MS);
     if (tool.kind === 'eraser') { eraseBegin(); eraseAt(xy(e)); showEraser(xy(e)); return; }
     pts = [xy(e)];
     if (tool.kind !== 'marker') { live.fillStyle = tool.color; penLive(live, curWidth() * map.scale, pts[0], pts[0]); }
-  });
+  }, { capture: true });
 
-  target.addEventListener('pointermove', (e) => {
-    if (scroll && e.pointerId === scroll.id) { moveScroll(e); return; }
-    if (e.pointerId !== active) return;
-    lastPen = Date.now();
+  liveCv.addEventListener('pointermove', (e) => {
+    if (e.pointerId !== active || switched) return;
+    lastPenAt = Date.now();
+    if (downXY && Math.hypot(e.clientX - downXY[0], e.clientY - downXY[1]) > 4) { clearTimeout(longTimer); downXY = null; }
     const co = e.getCoalescedEvents ? e.getCoalescedEvents() : [];
     const evs = co.length ? co : [e];
     if (tool.kind === 'eraser') { for (const ev of evs) eraseAt(xy(ev)); showEraser(xy(e)); return; }
@@ -323,6 +354,7 @@ export function mountInk(canvas, mappingFn, { editable = false, minHeightPx = 0 
     for (const ev of evs) {
       const q = xy(ev);
       const prev = pts[pts.length - 1];
+      if (!prev) { pts.push(q); continue; }
       if (Math.abs(q[0] - prev[0]) + Math.abs(q[1] - prev[1]) < 0.6) continue;
       pts.push(q);
       if (kind !== 'marker') {
@@ -337,15 +369,22 @@ export function mountInk(canvas, mappingFn, { editable = false, minHeightPx = 0 
   });
 
   const finish = (e) => {
-    if (scroll && e.pointerId === scroll.id) { endScroll(); return; }
     if (e.pointerId !== active) return;
     active = null;
-    lastPen = Date.now();
+    clearTimeout(longTimer);
+    lastPenAt = Date.now();
     drawingCount = Math.max(0, drawingCount - 1);
-    try { target.releasePointerCapture(e.pointerId); } catch { /* 既に外れている */ }
+    try { liveCv.releasePointerCapture(e.pointerId); } catch { /* 既に外れている */ }
+    liveCv.style.pointerEvents = '';
     live.clearRect(0, 0, liveCv.clientWidth, liveCv.clientHeight);
+    if (switched) { switched = false; if (gesture) eraseEnd(); notifyToolChange(); return; }
     if (tool.kind === 'eraser') { eraseEnd(); return; }
     if (!pts.length) return;
+    // Pencilで軽くタップしただけなら、下にある予定やボタンを押したことにする
+    if (pts.length === 1 && Date.now() - downAt < 300) {
+      const el = document.elementFromPoint(e.clientX, e.clientY)?.closest('[data-item], [data-goday], button, a');
+      if (el) { pts = []; el.click(); return; }
+    }
     const style = { kind: tool.kind, color: tool.color, width: curWidth() };
     paint(ctx, style.kind, style.color, style.width * map.scale, pts); // 下の層にすぐ描いて、ちらつかせない
     const stroke = makeStroke(map.page, style, pts.map(([x, y, p]) => [...map.fromPx(x, y), p]));
@@ -354,42 +393,8 @@ export function mountInk(canvas, mappingFn, { editable = false, minHeightPx = 0 
     redoStack.length = 0;
     inkApply([stroke], []);
   };
-  target.addEventListener('pointerup', finish);
-  target.addEventListener('pointercancel', finish);
-  target.addEventListener('pointerleave', () => { if (tool.kind === 'eraser' && active === null) live.clearRect(0, 0, liveCv.clientWidth, liveCv.clientHeight); });
-
-  // ── 指でのスクロール（慣性つき） ──
-  function scrollParent() {
-    for (let el = canvas.parentElement; el; el = el.parentElement) {
-      const oy = getComputedStyle(el).overflowY;
-      if ((oy === 'auto' || oy === 'scroll') && el.scrollHeight > el.clientHeight) return el;
-    }
-    return document.scrollingElement;
-  }
-  function startScroll(e) {
-    scroll = { id: e.pointerId, el: scrollParent(), y: e.clientY, v: 0, t: performance.now() };
-    try { target.setPointerCapture(e.pointerId); } catch { /* 無視 */ }
-  }
-  function moveScroll(e) {
-    const now = performance.now();
-    const dy = e.clientY - scroll.y;
-    scroll.el.scrollTop -= dy;
-    scroll.v = (-dy / Math.max(1, now - scroll.t)) * 0.8 + scroll.v * 0.2;
-    scroll.y = e.clientY;
-    scroll.t = now;
-  }
-  function endScroll() {
-    const { el } = scroll;
-    let v = scroll.v * 16;
-    scroll = null;
-    const step = () => {
-      if (Math.abs(v) < 0.5) return;
-      el.scrollTop += v;
-      v *= 0.94;
-      requestAnimationFrame(step);
-    };
-    requestAnimationFrame(step);
-  }
+  liveCv.addEventListener('pointerup', finish);
+  liveCv.addEventListener('pointercancel', finish);
 
   // ── 消しゴム ──
   let gesture = null; // この操作で消した元の線・作った線（取り消し用）
@@ -487,9 +492,7 @@ export function toolbarHtml() {
   const k = tool.kind;
   const sk = sizeKeyOf(k);
   const dot = (v) => Math.max(4, Math.min(18, sk === 'eraser' ? v / 2 : sk === 'marker' ? v / 1.6 : v * 2.2));
-  return `<div class="ink-bar" role="toolbar" aria-label="手書き">
-    <button type="button" class="btn sm ${tool.mode ? 'primary' : ''}" data-ink="mode" aria-pressed="${tool.mode}">✏️ ${tool.mode ? '手書き中' : '手書き'}</button>
-    ${tool.mode ? `
+  return `<div class="ink-bar" role="toolbar" aria-label="手書き（Apple Pencilでそのまま書けます。長押しでペン↔消しゴム）">
       <div class="seg">
         <button type="button" data-ink-kind="pen" aria-pressed="${k === 'pen'}" aria-label="ペン">🖊</button>
         <button type="button" data-ink-kind="marker" aria-pressed="${k === 'marker'}" aria-label="マーカー">🖍</button>
@@ -501,7 +504,7 @@ export function toolbarHtml() {
         : `<div class="ink-colors">${INK_COLORS.map((c) => `<button type="button" data-ink-color="${c}" aria-label="色" aria-pressed="${tool.color === c}" style="--c:${c}"></button>`).join('')}</div>`}
       <button type="button" class="icon-btn" data-ink="undo" aria-label="取り消し">↶</button>
       <button type="button" class="icon-btn" data-ink="redo" aria-label="やり直し">↷</button>
-      <label class="small muted row" style="gap:4px"><input type="checkbox" data-ink="finger" ${tool.finger ? 'checked' : ''}>指でも書く</label>` : ''}
+      <label class="small muted row" style="gap:4px"><input type="checkbox" data-ink="finger" ${tool.finger ? 'checked' : ''}>指でも書く</label>
   </div>`;
 }
 
@@ -511,7 +514,6 @@ export function bindToolbar(root, rerender) {
     b.addEventListener(a === 'finger' ? 'change' : 'click', () => {
       if (a === 'undo') return undo();
       if (a === 'redo') return redo();
-      if (a === 'mode') tool.mode = !tool.mode;
       if (a === 'finger') tool.finger = b.checked;
       saveTool();
       rerender();
