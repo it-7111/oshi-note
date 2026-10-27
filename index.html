@@ -17,8 +17,12 @@
 <body>
   <header class="topbar">
     <h1 id="title">推し活</h1>
-    <button id="sync-status" class="sync" type="button" aria-label="同期状態"></button>
+    <div class="row" style="gap:6px">
+      <button id="sync-status" class="sync" type="button" aria-label="同期状態"></button>
+      <button id="open-settings" class="icon-btn gear" type="button" aria-label="設定">⚙️</button>
+    </div>
   </header>
+  <div id="runbar"></div>
   <nav id="chips" class="chips" aria-label="推しの絞り込み"></nav>
   <main id="main"></main>
   <button id="fab" class="fab" type="button" aria-label="追加" hidden>＋</button>
@@ -28,7 +32,7 @@
     <button type="button" data-tab="goods"><span class="ti">🎁</span>グッズ</button>
     <button type="button" data-tab="lives"><span class="ti">🎤</span>参戦</button>
     <button type="button" data-tab="money"><span class="ti">💰</span>お金</button>
-    <button type="button" data-tab="settings"><span class="ti">⚙️</span>その他</button>
+    <button type="button" data-tab="records"><span class="ti">⏱</span>記録</button>
   </nav>
   <dialog id="modal"></dialog>
   <div id="toast" role="status" aria-live="polite"></div>

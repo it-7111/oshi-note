@@ -9,6 +9,8 @@ import { renderLives } from './views/lives.js';
 import { renderSettings } from './views/settings.js';
 import { renderMoney } from './views/money.js';
 import { renderHome } from './views/home.js';
+import { renderRecords } from './views/records.js';
+import { runbarHtml, bindRunbar, tickRunbar } from './activity.js';
 
 const VIEWS = {
   home: { title: 'ホーム', render: renderHome, chips: false },
@@ -16,7 +18,8 @@ const VIEWS = {
   goods: { title: 'グッズ', render: renderGoods, chips: true },
   lives: { title: '参戦記録', render: renderLives, chips: true },
   money: { title: 'お金', render: renderMoney, chips: true },
-  settings: { title: 'その他', render: renderSettings, chips: false },
+  records: { title: '記録', render: renderRecords, chips: true },
+  settings: { title: '設定', render: renderSettings, chips: false },
 };
 
 const main = document.getElementById('main');
@@ -70,6 +73,7 @@ function render(opts = {}) {
   document.querySelectorAll('.tabbar [data-tab]').forEach((b) => b.setAttribute('aria-current', b.dataset.tab === app.tab ? 'page' : 'false'));
   renderChips(v.chips);
   renderStatus();
+  renderRunbar();
   const top = main.scrollTop;
   ctx.focusSearch = !!opts.focusSearch;
   main.className = '';
@@ -105,6 +109,14 @@ function renderChips(show) {
   });
 }
 
+// 計測中の活動（どのタブでも上に出す）
+const runbar = document.getElementById('runbar');
+function renderRunbar() {
+  runbar.innerHTML = runbarHtml();
+  bindRunbar(runbar);
+}
+setInterval(() => tickRunbar(runbar), 1000);
+
 function renderStatus() {
   const b = document.getElementById('sync-status');
   const n = state.queue.length;
@@ -120,6 +132,12 @@ document.getElementById('sync-status').onclick = () => {
   if (isDemo()) { app.tab = 'settings'; ls.set('tab', app.tab); render({ resetScroll: true }); return; }
   if (state.sync.error) toast(state.sync.error);
   sync();
+};
+
+document.getElementById('open-settings').onclick = () => {
+  app.tab = 'settings';
+  ls.set('tab', app.tab);
+  render({ resetScroll: true });
 };
 
 document.querySelectorAll('.tabbar [data-tab]').forEach((b) => b.onclick = () => {

@@ -6,6 +6,7 @@ import { openLiveEditor } from './lives.js';
 import { liveSteps, archiveExpiry, watchedSet } from '../plans.js';
 import { mountInk, gridMapping, toolbarHtml, bindToolbar, onToolChange } from '../ink.js';
 import { weekKey, monthKey, hasMemo, isWide, memoPanelHtml, bindMemoPanel, openMemoViewer } from '../memo.js';
+import { segmentsOf, catColor, openActEditor } from '../activity.js';
 
 // 1時間の高さ。iPadでは画面の高さに合わせて、時間軸に16時間分が収まるようにする
 let HOUR_H = 44;
@@ -134,10 +135,26 @@ export function buildItems(from, to, sel) {
     });
   }
 
+  // 実際にやったこと（活動記録）。一時停止で区切られた区間ごとに出す
+  if (s.showActs !== false) {
+    for (const a of d.activities) {
+      if (a.Status === 'done' || a.Status === 'running' || a.Status === 'paused') {
+        segmentsOf(a).forEach(([st, en], i) => {
+          const b = new Date(st);
+          const e = en ? new Date(en) : new Date();
+          const date = ymd(b);
+          if (date < from || date > to || e - b < 60000) return;
+          const endT = ymd(e) === date ? `${pad(e.getHours())}:${pad(e.getMinutes())}` : '24:00';
+          push({ key: `act:${a.ActID}:${i}`, src: 'act', ref: a, date, startT: `${pad(b.getHours())}:${pad(b.getMinutes())}`, endT: endT === '24:00' ? '' : endT, defaultDur: 24 * 60, title: `⏱${a.Title}`, color: catColor(a.Category), act: true });
+        });
+      }
+    }
+  }
+
   // 自分の予定と推しの予定の重なり
   const mine = items.filter((i) => i.mine && !i.allDay);
   for (const it of items) {
-    if (it.mine || it.task || it.allDay) continue;
+    if (it.mine || it.task || it.allDay || it.act) continue;
     for (const m of mine) {
       if (m.date === it.date && it.start < m.end && m.start < it.end) { it.conflict = true; m.conflict = true; }
     }
@@ -306,7 +323,7 @@ function gridHtml(days, sel, t) {
       const top = (it.start / 60) * HOUR_H;
       const h = Math.max(((it.end - it.start) / 60) * HOUR_H - 2, 16);
       const w = 100 / it.lanes;
-      const cls = ['ev', it.mine && 'mine', it.conflict && 'conflict'].filter(Boolean).join(' ');
+      const cls = ['ev', it.mine && 'mine', it.act && 'act', it.conflict && 'conflict'].filter(Boolean).join(' ');
       html += `<button type="button" class="${cls}" style="--c:${it.color || 'var(--mine)'};top:${top}px;height:${h}px;left:calc(${it.lane * w}% + 1px);width:calc(${w}% - 2px)" data-item="${esc(it.key)}">
         ${days === 1 ? `<span class="t">${fromMin(it.start)}–${fromMin(it.end)}</span> ` : ''}<b>${esc(it.title)}</b>${days === 1 && it.ref?.place ? `<br><span class="t">@${esc(it.ref.place)}</span>` : ''}</button>`;
     }
@@ -354,6 +371,7 @@ function openLayers(ctx) {
       <label><input type="checkbox" data-flag="showMine" ${s.showMine ? 'checked' : ''}>自分の予定（予定GSSのS）</label>
       <label><input type="checkbox" data-flag="showTasks" ${s.showTasks ? 'checked' : ''}>タスク（予定GSSのT）</label>
       <label class="sub"><input type="checkbox" data-flag="showDone" ${s.showDone ? 'checked' : ''}>完了したタスクも表示</label>
+      <label><input type="checkbox" data-flag="showActs" ${s.showActs !== false ? 'checked' : ''}>実際にやったこと（記録タブ）</label>
       ${groups().map((g) => line(g, false) + membersOf(g.OshiID).map((m) => line(m, true)).join('')).join('')}
     </div>`;
   openModal({
@@ -375,6 +393,7 @@ function openItem(key, ctx) {
   const it = lastItems.get(key);
   if (!it) return;
   if (it.src === 'live') return openLiveEditor(it.ref, ctx);
+  if (it.src === 'act') return it.ref.Status === 'done' ? openActEditor(it.ref) : toast('計測中です。上のバーから終了できます');
   if (it.src === 'event') return openEventDetail(it, ctx);
   const x = it.ref;
   const rows = it.src === 'sched'

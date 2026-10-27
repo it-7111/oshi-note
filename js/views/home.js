@@ -8,6 +8,8 @@ import { liveSteps, pendingArchives } from '../plans.js';
 import { weekKey, monthKey, memoText, hasMemo, openMemoViewer, isWide } from '../memo.js';
 import { savingsGoal } from './money.js';
 import { toast } from '../ui.js';
+import { activeAct, doneActs, openDeclare, fmtMin } from '../activity.js';
+import { ymd } from '../util.js';
 
 const ALL = { group: null, member: null };
 const daysUntil = (d) => Math.round((parseYmd(d) - parseYmd(today())) / 864e5);
@@ -55,6 +57,8 @@ export function renderHome(main, ctx) {
       <b>${daysUntil(next.Date) === 0 ? '今日！' : `あと${daysUntil(next.Date)}日`}</b>
       <span>${esc(next.Title)}　<span class="muted small">${fmtMD(next.Date)} ${esc(next.Venue || '')}</span></span>
     </button>` : ''}
+    ${activeAct() ? '' : `<div class="card act-quick"><div><b>⏱ これからやること</b><br><span class="small muted">今日の記録 ${fmtMin(doneActs().filter((a) => a.StartAt && ymd(new Date(a.StartAt)) === t).reduce((s, a) => s + Number(a.ActualMin || 0), 0))}</span></div>
+      <button type="button" class="btn primary" data-declare>宣言して開始</button></div>`}
     <div class="home-grid">
     <section class="card section">
       <h2>今日・明日</h2>
@@ -109,6 +113,7 @@ export function renderHome(main, ctx) {
   main.innerHTML = html;
 
   main.querySelector('[data-next]')?.addEventListener('click', () => openLiveEditor(next, ctx));
+  main.querySelector('[data-declare]')?.addEventListener('click', () => openDeclare(ctx));
   main.querySelectorAll('[data-todo]').forEach((b) => b.onclick = () => todo[Number(b.dataset.todo)].open());
   main.querySelectorAll('[data-watch]').forEach((b) => b.onclick = async () => {
     const a = archives[Number(b.dataset.watch)];

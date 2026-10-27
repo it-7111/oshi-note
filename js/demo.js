@@ -89,12 +89,27 @@ export function demoData() {
     { MemoID: `week:${mon}`, Text: '・グッズの受け取り（今週中）\n・新曲MVの感想をまとめる', UpdatedAt: '' },
     { MemoID: `month:${t.slice(0, 7)}`, Text: '今月中にFCの更新\n遠征費の目安：3万円', UpdatedAt: '' },
   ];
+  // 活動記録（デモ）
+  const iso = (dayOff, h, m) => { const d = new Date(); d.setDate(d.getDate() + dayOff); d.setHours(h, m, 0, 0); return d.toISOString(); };
+  const act = (id, off, h, m, title, cat, plan, actual, rating, reasons, comment) => {
+    const st = iso(off, h, m);
+    const en = new Date(Date.parse(st) + actual * 60000).toISOString();
+    return { ActID: id, Title: title, Category: cat, OshiID: cat === '推し活' ? 'sixfonia' : '', PlannedMin: String(plan), StartAt: st, EndAt: en, Segments: JSON.stringify([[st, en]]), ActualMin: String(actual), Rating: String(rating), Reasons: reasons, Comment: comment, TaskRef: '', Status: 'done', UpdatedAt: '' };
+  };
+  const activities = [
+    act('a1', -3, 20, 0, '新曲の歌詞を覚える', '推し活', 30, 45, 4, '思ったより簡単だった', ''),
+    act('a2', -2, 10, 0, '線形代数の演習', '勉強', 60, 85, 3, '見積もりが甘かった', '演習3まで'),
+    act('a3', -2, 21, 0, '配信アーカイブを見る', '推し活', 60, 70, 5, '', '神回'),
+    act('a4', -1, 9, 30, '部屋の片付け', '家事', 30, 40, 4, '途中でやることが増えた', ''),
+    act('a5', -1, 14, 0, '測度論のノート整理', '勉強', 90, 120, 3, '割り込みがあった', ''),
+    act('a6', 0, 8, 0, 'レポートの構成を考える', '勉強', 45, 50, 4, '集中できた', ''),
+  ];
   const config = [
     { Key: 'savingsGoal', Value: JSON.stringify({ targetDate: addDays(t, 60), includeLives: true, extra: 0 }), UpdatedAt: '' },
   ];
 
   return {
-    oshi, goods, events, lives, schedule, purchases, expenses, savings, config, memos, conflicts: [],
+    oshi, goods, events, lives, schedule, purchases, expenses, savings, config, memos, conflicts: [], activities,
     genres: ['缶バッジ', 'アクリルスタンド', 'その他', '日用雑貨/文房具', 'カード', 'CD', 'アパレル/アクセサリー', 'その他キーホルダー', 'アクリルキーホルダー', 'チェキ', 'ぬいぐるみ'],
   };
 }

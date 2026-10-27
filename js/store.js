@@ -12,11 +12,11 @@ import { demoData } from './demo.js';
 
 const EMPTY = () => ({
   oshi: [], goods: [], events: [], lives: [], schedule: [], genres: [], expenses: [], savings: [], config: [], purchases: [],
-  memos: [], conflicts: [],
+  memos: [], conflicts: [], activities: [],
 });
 const DEFAULT_SETTINGS = {
   gasUrl: '', token: '', device: '', weekStart: 1,
-  hidden: [], showMine: true, showTasks: true, showDone: false,
+  hidden: [], showMine: true, showTasks: true, showDone: false, showActs: true,
 };
 
 export const state = {
@@ -41,7 +41,7 @@ export const keyOf = (g) => `${g.Sheet}:${g.ID}`;
 export const TABLE_KEY = {
   Oshi: ['oshi', 'OshiID'], Events: ['events', 'EventID'], Lives: ['lives', 'LiveID'],
   Expenses: ['expenses', 'ExpenseID'], Savings: ['savings', 'SavingID'], Config: ['config', 'Key'],
-  Memos: ['memos', 'MemoID'], Conflicts: ['conflicts', 'ConflictID'],
+  Memos: ['memos', 'MemoID'], Conflicts: ['conflicts', 'ConflictID'], Activities: ['activities', 'ActID'],
 };
 const GOODS_FIELDS = ['Name', 'Sub', 'Person', 'Genre', 'Price', 'Want', 'Trade', 'Memo', 'Deleted'];
 
@@ -392,7 +392,7 @@ export async function sync() {
 export const scheduleSync = debounce(sync, 1500);
 
 // GASが新しい形式（項目ごとのマージ）に対応しているか。古いままだと変更が失われるので送らない
-const API_VERSION = 3;
+const API_VERSION = 4;
 let apiChecked = false;
 async function checkApi() {
   if (apiChecked) return;

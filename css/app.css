@@ -411,3 +411,34 @@ body.cal-fit .fab { right: calc(320px + 48px); }
 }
 main.fit .cal-layout { align-items: stretch; }
 main.fit .cal-main { height: 100%; }
+
+/* ── 記録（タイマー） ── */
+.gear { font-size: 18px; padding: 2px 4px; }
+#runbar:empty { display: none; }
+.runbar { display: flex; align-items: center; gap: 8px; margin: 0 16px 8px; padding: 8px 10px; border-radius: 12px; background: var(--surface); border: 1px solid var(--border); border-left: 4px solid var(--c); box-shadow: var(--shadow); flex-wrap: wrap; }
+.runbar .rb-dot { width: 10px; height: 10px; border-radius: 50%; background: var(--c); flex: none; }
+.runbar.live .rb-dot { animation: pulse 1.4s ease-in-out infinite; }
+.runbar.paused { opacity: .85; }
+.runbar.paused .rb-dot { background: var(--mine); }
+@keyframes pulse { 50% { opacity: .25; } }
+.runbar .rb-title { font-weight: 700; font-size: 14px; flex: 1 1 120px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.runbar .rb-time { font-variant-numeric: tabular-nums; font-size: 18px; font-weight: 700; }
+.runbar .rb-plan { font-size: 12px; color: var(--muted); }
+.runbar.over { border-color: var(--danger); border-left-color: var(--danger); }
+.runbar.over .rb-time { color: var(--danger); }
+@media (min-width: 760px) { .runbar { margin: 0 24px 8px; } }
+.act-quick { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 12px 14px; margin-bottom: 12px; }
+.act-row { display: grid; grid-template-columns: 3.2em 1fr auto; gap: 10px; align-items: center; width: 100%; text-align: left; padding: 10px 12px; margin-bottom: 8px; border-left: 4px solid var(--c); }
+.act-row .ar-time { font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.act-row .ar-main { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.act-row .ar-title { font-weight: 700; font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.act-row .ar-comment { color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.act-row .ar-rate { color: #f59e0b; font-size: 12px; white-space: nowrap; }
+b.over, .over b { color: var(--danger); }
+b.under { color: var(--ok); }
+.act-sum { padding: 10px 12px; margin-bottom: 12px; display: flex; flex-direction: column; gap: 4px; }
+.chip-row.wrap { flex-wrap: wrap; overflow: visible; }
+.plan-input { flex: 0 0 72px; width: 72px; padding: 5px 8px; }
+.hint { background: var(--accent-soft); border-radius: 10px; padding: 8px 10px; margin: 0 0 12px; }
+.ev.act { background: repeating-linear-gradient(135deg, color-mix(in srgb, var(--c) 22%, var(--surface)) 0 6px, color-mix(in srgb, var(--c) 10%, var(--surface)) 6px 12px); border-left-style: dashed; }
+.oshi-line .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--c); flex: none; }

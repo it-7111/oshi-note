@@ -4,11 +4,12 @@ import { esc } from '../util.js';
 import { toast } from '../ui.js';
 import { openOshiEditor } from './oshi-edit.js';
 import { notifyHtml, bindNotify } from './notify.js';
+import { categories, saveCategories, CAT_COLORS } from '../activity.js';
 
 const OP_LABEL = { 'goods.delta': '所持数', 'goods.update': 'グッズ編集', 'goods.create': 'グッズ追加', 'goods.image': '画像', 'row.upsert': '予定・参戦・推しなど' };
 
-const TABLE_LABEL = { Memos: 'メモ', Events: '予定', Lives: '参戦記録', Oshi: '推し', Expenses: '支出', Savings: '貯金', Config: '設定' };
-const FIELD_LABEL = { Text: '本文', Title: 'タイトル', Memo: 'メモ', Deleted: '削除', Want: '欲しい数', Trade: '譲れる数', Name: '名前', Watched: '視聴済み', Checklist: '持ち物', TravelMemo: '遠征メモ' };
+const TABLE_LABEL = { Activities: '活動記録', Memos: 'メモ', Events: '予定', Lives: '参戦記録', Oshi: '推し', Expenses: '支出', Savings: '貯金', Config: '設定' };
+const FIELD_LABEL = { Comment: 'コメント', Rating: '自己評価', Segments: '計測時間', Status: '状態', Text: '本文', Title: 'タイトル', Memo: 'メモ', Deleted: '削除', Want: '欲しい数', Trade: '譲れる数', Name: '名前', Watched: '視聴済み', Checklist: '持ち物', TravelMemo: '遠征メモ' };
 
 function rowName(c) {
   if (c.Table === 'Memos') return c.RowID.startsWith('week:') ? `${c.RowID.slice(5)}の週のメモ` : `${c.RowID.slice(6)}のメモ`;
@@ -19,6 +20,50 @@ function rowName(c) {
 }
 
 /** 2台で同じ項目を変えたときの記録。どちらの内容にするか選べる */
+/** 記録タブの分類（Configシートに保存） */
+function categoriesHtml() {
+  return `<section class="card section" data-cats-sec>
+    <h2>記録の分類</h2>
+    ${categories().map((c, i, all) => `<div class="oshi-line"><span class="dot" style="--c:${c.color}"></span><span style="flex:1">${esc(c.name)}</span>
+      <button type="button" class="icon-btn" data-cat-up="${i}" ${i ? '' : 'disabled'} aria-label="上へ">↑</button>
+      <button type="button" class="icon-btn" data-cat-down="${i}" ${i < all.length - 1 ? '' : 'disabled'} aria-label="下へ">↓</button>
+      <button type="button" class="icon-btn" data-cat-del="${i}" aria-label="削除">✕</button></div>`).join('')}
+    <div class="row" style="margin-top:10px;flex-wrap:wrap">
+      <input class="search" data-cat-name placeholder="新しい分類（例：バイト）">
+      <div class="ink-colors">${CAT_COLORS.map((c, i) => `<button type="button" data-cat-color="${c}" aria-pressed="${i === 0}" style="--c:${c}" aria-label="色"></button>`).join('')}</div>
+      <button type="button" class="btn sm primary" data-cat-add>追加</button>
+    </div>
+    <p class="small muted">消した分類の過去の記録はそのまま残ります。</p>
+  </section>`;
+}
+
+function bindCategories(main) {
+  const sec = main.querySelector('[data-cats-sec]');
+  let color = CAT_COLORS[0];
+  const list = () => categories().map((c) => ({ ...c }));
+  sec.querySelectorAll('[data-cat-color]').forEach((b) => b.onclick = () => {
+    color = b.dataset.catColor;
+    sec.querySelectorAll('[data-cat-color]').forEach((x) => x.setAttribute('aria-pressed', String(x === b)));
+  });
+  sec.querySelector('[data-cat-add]').onclick = async () => {
+    const name = sec.querySelector('[data-cat-name]').value.trim();
+    if (!name) return toast('分類の名前を入れてください');
+    if (categories().some((c) => c.name === name)) return toast('同じ名前の分類があります');
+    await saveCategories([...list(), { name, color }]);
+    toast('追加しました');
+  };
+  const move = (i, d) => { const l = list(); [l[i], l[i + d]] = [l[i + d], l[i]]; saveCategories(l); };
+  sec.querySelectorAll('[data-cat-up]').forEach((b) => b.onclick = () => move(Number(b.dataset.catUp), -1));
+  sec.querySelectorAll('[data-cat-down]').forEach((b) => b.onclick = () => move(Number(b.dataset.catDown), 1));
+  sec.querySelectorAll('[data-cat-del]').forEach((b) => b.onclick = () => {
+    const l = list();
+    if (l.length <= 1) return toast('分類は1つ以上必要です');
+    if (!confirm(`分類「${l[Number(b.dataset.catDel)].name}」を消しますか？`)) return;
+    l.splice(Number(b.dataset.catDel), 1);
+    saveCategories(l);
+  });
+}
+
 function conflictsHtml() {
   const list = state.data.conflicts;
   if (!list.length) return '';
@@ -89,6 +134,8 @@ export function renderSettings(main, ctx) {
       <p class="small muted">タップすると色・誕生日・デビュー日・推し始めた日を編集できます（グッズGSSの「Oshi」シートに保存）。</p>
     </section>
 
+    ${categoriesHtml()}
+
     ${notifyHtml()}
 
     <section class="card section">
@@ -101,7 +148,7 @@ export function renderSettings(main, ctx) {
       </div>
       <p class="small muted">端末の保存領域：${state.persisted === true ? '保護済み（自動では消されません）' : state.persisted === false ? '未保護。ホーム画面に追加して使うと消されにくくなります' : '確認できません'}</p>
     </section>
-    <p class="small muted" style="text-align:center">推し活ノート v0.3.2</p>`;
+    <p class="small muted" style="text-align:center">推し活ノート v0.4</p>`;
 
   main.querySelector('[data-sync]')?.addEventListener('click', () => sync());
   const oshiMap = new Map(state.data.oshi.map((o) => [o.OshiID, o]));
@@ -109,6 +156,7 @@ export function renderSettings(main, ctx) {
   main.querySelectorAll('[data-add-member]').forEach((b) => b.onclick = () => openOshiEditor(null, { Type: 'member', ParentID: b.dataset.addMember }));
   main.querySelector('[data-add-group]').onclick = () => openOshiEditor(null, { Type: 'group' });
   bindNotify(main);
+  bindCategories(main);
   main.querySelectorAll('[data-cf]').forEach((b) => b.onclick = async () => {
     const c = state.data.conflicts.find((x) => x.ConflictID === b.dataset.cf);
     if (!c) return;
