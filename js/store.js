@@ -217,16 +217,14 @@ const saveInk = debounce(() => db.set('kv', 'ink', [...state.ink.values()]), 400
 
 export const inkStrokes = () => state.ink.values();
 
-/** 線を追加（取り消しの復元にも使う） */
-export function inkPut(strokes) {
-  strokes.forEach((s) => state.ink.set(s.id, s));
-  queueInk(strokes, []);
+/** 線の追加と削除を1回でまとめて行う（部分消しは「元の線を消して残りを足す」） */
+export function inkApply(puts, dels) {
+  dels.forEach((id) => state.ink.delete(id));
+  puts.forEach((s) => state.ink.set(s.id, s));
+  queueInk(puts, dels);
 }
-
-export function inkDel(ids) {
-  ids.forEach((id) => state.ink.delete(id));
-  queueInk([], ids);
-}
+export const inkPut = (strokes) => inkApply(strokes, []);
+export const inkDel = (ids) => inkApply([], ids);
 
 function queueInk(puts, dels) {
   saveInk();

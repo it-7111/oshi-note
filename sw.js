@@ -1,6 +1,6 @@
 // オフライン用：アプリのファイルを端末にキャッシュする。
 // ファイルを更新したら VERSION を上げる（次回起動時に新しい版へ切り替わる）。
-const VERSION = 'v0.3.0';
+const VERSION = 'v0.3.1';
 const CACHE = `oshi-app-${VERSION}`;
 const FILES = [
   './', 'index.html', 'manifest.webmanifest', 'css/app.css',

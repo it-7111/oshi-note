@@ -101,7 +101,7 @@ export function renderSettings(main, ctx) {
       </div>
       <p class="small muted">端末の保存領域：${state.persisted === true ? '保護済み（自動では消されません）' : state.persisted === false ? '未保護。ホーム画面に追加して使うと消されにくくなります' : '確認できません'}</p>
     </section>
-    <p class="small muted" style="text-align:center">推し活ノート v0.3</p>`;
+    <p class="small muted" style="text-align:center">推し活ノート v0.3.1</p>`;
 
   main.querySelector('[data-sync]')?.addEventListener('click', () => sync());
   const oshiMap = new Map(state.data.oshi.map((o) => [o.OshiID, o]));

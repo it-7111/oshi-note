@@ -7,7 +7,9 @@ import { liveSteps, archiveExpiry, watchedSet } from '../plans.js';
 import { mountInk, gridMapping, toolbarHtml, bindToolbar } from '../ink.js';
 import { weekKey, monthKey, hasMemo, isWide, memoPanelHtml, bindMemoPanel, openMemoViewer } from '../memo.js';
 
-const HOUR_H = 44;
+// 1時間の高さ。iPadでは画面の高さに合わせて、時間軸に16時間分が収まるようにする
+let HOUR_H = 44;
+const fitHour = { winH: 0, h: 44 };
 const DEADLINE_KINDS = ['申込締切', '入金締切', '当落発表'];
 export const EVENT_KINDS = ['配信', 'ライブ', 'リリース', '申込締切', '当落発表', '入金締切', 'その他'];
 const KIND_ICON = { 配信: '📺', ライブ: '🎤', リリース: '💿', 申込締切: '📝', 当落発表: '🎫', 入金締切: '💴', その他: '📌' };
@@ -159,17 +161,20 @@ export function renderCalendar(main, ctx) {
   const wide = isWide();
   const memos = currentMemos();
   const memoDot = memos.some((m) => hasMemo(m.key));
+  HOUR_H = wide && fitHour.winH === window.innerHeight ? fitHour.h : wide ? Math.max(24, Math.min(56, Math.floor((window.innerHeight - 330) / 16))) : 44;
+  main.classList.toggle('fit', wide); // iPadでは画面全体をスクロールさせず、1画面に収める
+  document.body.classList.toggle('cal-fit', wide);
   let html = `
-    <div class="row" style="margin:2px 0 8px;flex-wrap:wrap">
+    <div class="row cal-controls" style="margin:2px 0 8px;flex-wrap:wrap">
       <div class="seg" role="group" aria-label="表示形式">
         ${[['day', '日'], ['week', '週'], ['month', '月']].map(([v, l]) => `<button type="button" data-view="${v}" aria-pressed="${ui.view === v}">${l}</button>`).join('')}
       </div>
+      ${wide ? toolbarHtml() : ''}
       <span class="spacer"></span>
       ${wide ? '' : `<button type="button" class="btn sm memo-btn ${memoDot ? 'has' : ''}" data-memo-open aria-label="メモを見る">📝${memoDot ? '<i></i>' : ''}</button>`}
       <button type="button" class="btn sm" data-today>今日</button>
       <button type="button" class="btn sm" data-layers>表示 ▾</button>
     </div>
-    ${wide ? toolbarHtml() : ''}
     <div class="cal-layout"><div class="cal-main">`;
 
   if (ui.view === 'month') html += monthHtml(ctx.sel, t);
@@ -200,6 +205,15 @@ export function renderCalendar(main, ctx) {
   main.querySelectorAll('[data-item]').forEach((b) => b.onclick = (e) => { e.stopPropagation(); openItem(b.dataset.item, ctx); });
 
   const grid = main.querySelector('.tgrid');
+  if (grid && wide) {
+    // 実際の高さから1時間の高さを決め直す（画面の高さが変わらない限り1回だけ）
+    const want = Math.max(24, Math.min(60, Math.floor(grid.clientHeight / 16)));
+    fitHour.winH = window.innerHeight;
+    if (Math.abs(want - fitHour.h) > 1 || HOUR_H !== want) {
+      fitHour.h = want;
+      if (HOUR_H !== want) { ui.scroll = null; return renderCalendar(main, ctx); }
+    }
+  }
   if (grid) {
     grid.scrollTop = ui.scroll ?? 8 * HOUR_H;
     grid.onscroll = () => { ui.scroll = grid.scrollTop; };
@@ -278,7 +292,7 @@ function gridHtml(days, sel, t) {
     : `${parseYmd(start).getFullYear()}年 ${fmtMD(start)}`;
 
   let html = navHtml(title);
-  html += `<div class="grid-wrap card ${days > 1 ? 'wk' : ''}" style="--days:${days}">`;
+  html += `<div class="grid-wrap card ${days > 1 ? 'wk' : ''}" style="--days:${days};--hour-h:${HOUR_H}px">`;
   html += `<div class="grid-head"><div></div>${dates.map((d) => `<button type="button" class="d ${d === t ? 'today' : ''} ${wdClass(d)}" data-goday="${d}"><span class="num ${wdClass(d)}">${WD[weekday(d)]}</span><b>${Number(d.slice(8))}</b></button>`).join('')}</div>`;
   html += `<div class="allday"><div class="lbl">終日</div>${dates.map((d) => `<div class="col">${items.filter((i) => i.allDay && i.date === d).map(pillHtml).join('')}</div>`).join('')}</div>`;
   html += `<div class="tgrid"><div class="tgrid-inner"><div class="hours">${Array.from({ length: 24 }, (_, h) => (h ? `<span style="top:${h * HOUR_H}px">${h}</span>` : '')).join('')}</div>`;

@@ -1,6 +1,6 @@
 // 週メモ・月メモ（文字＋手書き）。iPadでは常に表示して編集、iPhoneではタップで閲覧だけ。
-import { state, upsertRow } from './store.js';
-import { esc, debounce } from './util.js';
+import { state } from './store.js';
+import { esc } from './util.js';
 import { mountInk, memoMapping, pageHasInk } from './ink.js';
 import { openModal } from './ui.js';
 
@@ -17,22 +17,25 @@ export function memoPanelHtml(memos, editable) {
   return memos.map(({ key, title }) => `
     <section class="memo-card card" data-memo="${esc(key)}">
       <h3>${esc(title)}</h3>
-      ${editable
-        ? `<textarea class="memo-text" data-memo-text="${esc(key)}" placeholder="文字のメモ（Pencilで書くと文字になります）">${esc(memoText(key))}</textarea>`
-        : (memoText(key).trim() ? `<p class="memo-read">${esc(memoText(key))}</p>` : '')}
+      ${memoText(key).trim() ? `<p class="memo-read">${esc(memoText(key))}</p>` : ''}
       <canvas class="memo-ink" data-memo-ink="${esc(key)}" aria-label="${esc(title)}の手書き"></canvas>
     </section>`).join('');
 }
 
-const saveText = new Map();
+/** 手書き欄を表示する。iPadでは、横に並ぶメモ欄の高さを等分して最初から書ける広さにする */
 export function bindMemoPanel(root, editable) {
-  root.querySelectorAll('[data-memo-text]').forEach((ta) => {
-    const key = ta.dataset.memoText;
-    if (!saveText.has(key)) saveText.set(key, debounce((v) => upsertRow('Memos', { MemoID: key, Text: v }), 800));
-    ta.addEventListener('input', () => saveText.get(key)(ta.value));
-  });
-  root.querySelectorAll('[data-memo-ink]').forEach((cv) => {
-    mountInk(cv, memoMapping(`memo:${cv.dataset.memoInk}`), { editable, minHeightUnits: editable ? 700 : 0 });
+  const side = root.querySelector('.memo-side');
+  const cards = [...root.querySelectorAll('[data-memo-ink]')];
+  let minH = 0;
+  if (editable && side) {
+    const gap = 10;
+    const head = 40; // 見出しの分
+    const n = getComputedStyle(side).flexDirection === 'row' ? 1 : cards.length; // 縦向きは横並び
+    minH = Math.max(160, (side.clientHeight - gap * (n - 1)) / n - head - 24);
+  }
+  cards.forEach((cv) => {
+    const extra = cv.previousElementSibling?.classList.contains('memo-read') ? cv.previousElementSibling.offsetHeight : 0;
+    mountInk(cv, memoMapping(`memo:${cv.dataset.memoInk}`), { editable, minHeightPx: Math.max(0, minH - extra) });
   });
 }
 

@@ -375,3 +375,39 @@ details.sec summary { font-weight: 700; font-size: 14px; cursor: pointer; paddin
 .tabbar button { font-size: 10px; white-space: nowrap; letter-spacing: -.02em; }
 .fields-2 > *, .fields-3 > * { min-width: 0; }
 .field input[type="datetime-local"], .field input[type="date"], .field input[type="time"] { min-width: 0; max-width: 100%; }
+
+/* ── 手書きの重ね層 ── */
+.memo-card { position: relative; }
+.ink-layer, .memo-ink { pointer-events: none; }
+.ink-live { position: absolute; pointer-events: none; z-index: 4; -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
+.ink-live.drawing { pointer-events: auto; cursor: crosshair; }
+.ink-sizes { display: inline-flex; align-items: center; gap: 2px; background: var(--surface-2); border-radius: 10px; padding: 2px; }
+.ink-sizes button { width: 30px; height: 30px; border: 0; background: none; border-radius: 8px; display: grid; place-items: center; color: var(--text); padding: 0; }
+.ink-sizes button[aria-pressed="true"] { background: var(--surface); box-shadow: var(--shadow); }
+.ink-sizes i { display: block; border-radius: 50%; }
+.cal-controls .ink-bar { margin: 0; }
+
+/* ── iPad：カレンダーを1画面に収める ── */
+main.fit { display: flex; flex-direction: column; overflow: hidden; padding-bottom: calc(var(--tabbar-h) + env(safe-area-inset-bottom) + 8px); }
+main.fit .cal-controls { flex: none; margin-bottom: 6px !important; }
+main.fit .cal-layout { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(0, 1fr) 320px; grid-template-rows: minmax(0, 1fr); gap: 14px; }
+main.fit .cal-main { display: flex; flex-direction: column; min-height: 0; }
+main.fit .cal-head { flex: none; margin: 0 0 6px; }
+main.fit .grid-wrap { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+main.fit .tgrid { flex: 1; height: auto; min-height: 0; }
+main.fit .month { flex: 1; min-height: 0; grid-template-rows: auto repeat(6, minmax(0, 1fr)); }
+main.fit .month .cell { min-height: 0; overflow: hidden; }
+main.fit .legend { display: none; }
+main.fit .memo-side { margin: 0; height: 100%; max-height: none; overflow-y: auto; position: static; gap: 10px; }
+main.fit .memo-card { padding: 10px 12px; }
+main.fit .memo-card h3 { margin-bottom: 4px; }
+body.cal-fit .fab { right: calc(320px + 48px); }
+/* iPadの縦向きはメモ欄を下に */
+@media (max-aspect-ratio: 1/1) {
+  main.fit .cal-layout { grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(0, 1.6fr) minmax(0, 1fr); }
+  main.fit .memo-side { flex-direction: row; }
+  main.fit .memo-card { flex: 1; min-width: 0; overflow-y: auto; }
+  body.cal-fit .fab { right: 18px; bottom: calc(var(--tabbar-h) + env(safe-area-inset-bottom) + 40%); }
+}
+main.fit .cal-layout { align-items: stretch; }
+main.fit .cal-main { height: 100%; }

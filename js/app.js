@@ -72,6 +72,8 @@ function render(opts = {}) {
   renderStatus();
   const top = main.scrollTop;
   ctx.focusSearch = !!opts.focusSearch;
+  main.className = '';
+  document.body.classList.remove('cal-fit');
   v.render(main, ctx);
   main.scrollTop = opts.resetScroll ? 0 : top;
 }
