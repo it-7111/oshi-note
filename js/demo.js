@@ -38,7 +38,7 @@ export function demoData() {
   const offsetToFri = (5 - weekday(t) + 7) % 7;
   const fri = addDays(t, offsetToFri);
   const events = [
-    { EventID: 'e1', OshiID: 'sixfonia', Kind: '配信', Title: '定期生配信', Date: addDays(fri, -14), Start: '21:00', End: '22:30', Repeat: 'weekly', URL: '', Memo: '', UpdatedAt: '' },
+    { EventID: 'e1', OshiID: 'sixfonia', Kind: '配信', Title: '定期生配信', Date: addDays(fri, -14), Start: '21:00', End: '22:30', Repeat: 'weekly', URL: '', Memo: '', UpdatedAt: '', ArchiveDays: '7', ArchiveUntil: '', Watched: '' },
     { EventID: 'e2', OshiID: 'sixfonia', Kind: 'リリース', Title: '新曲MV公開', Date: addDays(t, 3), Start: '18:00', End: '', Repeat: 'none', URL: '', Memo: '', UpdatedAt: '' },
     { EventID: 'e3', OshiID: 'sixfonia', Kind: '申込締切', Title: 'FC先行 申込締切', Date: addDays(t, 5), Start: '23:59', End: '', Repeat: 'none', URL: '', Memo: '', UpdatedAt: '' },
     { EventID: 'e4', OshiID: 'irregular', Kind: '配信', Title: 'いれいす 生配信', Date: addDays(t, 1), Start: '20:00', End: '21:00', Repeat: 'none', URL: '', Memo: '', UpdatedAt: '' },
@@ -46,7 +46,11 @@ export function demoData() {
   ];
 
   const lives = [
-    { LiveID: 'l1', OshiID: 'sixfonia', Date: addDays(t, 40), Open: '17:00', Start: '18:00', Title: '冬ツアー 東京公演', Tour: 'Winter Tour', Venue: '東京ホール', Status: '当選', Seat: '1階 15列', Companions: '', Ticket: '9800', Travel: '0', Setlist: '', Photos: '', Rating: '', Memo: '', UpdatedAt: '' },
+    { LiveID: 'l1', OshiID: 'sixfonia', Date: addDays(t, 40), Open: '17:00', Start: '18:00', Title: '冬ツアー 東京公演', Tour: 'Winter Tour', Venue: '東京ホール', Status: '当選', Seat: '1階 15列', Companions: '', Ticket: '9800', Travel: '0', Setlist: '', Photos: '', Rating: '', Memo: '', UpdatedAt: '',
+      PayBy: `${addDays(t, 4)} 23:59`, Paid: '', IssueAt: `${addDays(t, 30)} 12:00`, Issued: '', TravelMemo: '新幹線 9:30 東京発（指定席予約済み）\nホテル：駅前ホテル 1泊',
+      Checklist: JSON.stringify([{ t: 'チケット（発券・アプリ）', d: false }, { t: '身分証', d: true }, { t: 'ペンライト・電池', d: true }, { t: 'モバイルバッテリー', d: false }]) },
+    { LiveID: 'l4', OshiID: 'irregular', Date: addDays(t, 75), Open: '', Start: '18:30', Title: '春ツアー 横浜公演', Tour: '', Venue: '横浜アリーナ', Status: '申込中', Seat: '', Companions: '', Ticket: '9500', Travel: '3000', Setlist: '', Photos: '', Rating: '', Memo: '', UpdatedAt: '',
+      ApplyBy: `${addDays(t, 2)} 23:59`, ResultAt: `${addDays(t, 9)} 15:00` },
     { LiveID: 'l2', OshiID: 'sixfonia', Date: addDays(t, -60), Open: '16:00', Start: '17:00', Title: '夏ライブ 大阪公演', Tour: 'Summer Live', Venue: '大阪アリーナ', Status: '参戦済', Seat: 'スタンド B-12', Companions: '友人', Ticket: '9800', Travel: '15400', Setlist: '1. オープニング曲\n2. 代表曲\n3. 新曲', Photos: '', Rating: '5', Memo: '最高だった', UpdatedAt: '' },
     { LiveID: 'l3', OshiID: 'irregular', Date: addDays(t, -200), Open: '', Start: '19:00', Title: '配信ライブ', Tour: '', Venue: 'オンライン', Status: '配信視聴', Seat: '', Companions: '', Ticket: '4500', Travel: '0', Setlist: '', Photos: '', Rating: '4', Memo: '', UpdatedAt: '' },
   ];
@@ -80,12 +84,17 @@ export function demoData() {
     { SavingID: 's1', Date: addDays(t, -30), Amount: '6000', Memo: 'バイト代から', UpdatedAt: '' },
     { SavingID: 's2', Date: addDays(t, -2), Amount: '2000', Memo: '', UpdatedAt: '' },
   ];
+  const mon = addDays(t, -((weekday(t) + 6) % 7));
+  const memos = [
+    { MemoID: `week:${mon}`, Text: '・グッズの受け取り（今週中）\n・新曲MVの感想をまとめる', UpdatedAt: '' },
+    { MemoID: `month:${t.slice(0, 7)}`, Text: '今月中にFCの更新\n遠征費の目安：3万円', UpdatedAt: '' },
+  ];
   const config = [
     { Key: 'savingsGoal', Value: JSON.stringify({ targetDate: addDays(t, 60), includeLives: true, extra: 0 }), UpdatedAt: '' },
   ];
 
   return {
-    oshi, goods, events, lives, schedule, purchases, expenses, savings, config,
+    oshi, goods, events, lives, schedule, purchases, expenses, savings, config, memos, conflicts: [],
     genres: ['缶バッジ', 'アクリルスタンド', 'その他', '日用雑貨/文房具', 'カード', 'CD', 'アパレル/アクセサリー', 'その他キーホルダー', 'アクリルキーホルダー', 'チェキ', 'ぬいぐるみ'],
   };
 }

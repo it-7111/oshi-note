@@ -2,13 +2,16 @@ import { state, init, subscribe, sync, isDemo, onNotice } from './store.js';
 import { groups, membersOf, oshiById } from './oshi.js';
 import { esc } from './util.js';
 import { toast } from './ui.js';
+import { isDrawing } from './ink.js';
 import { renderCalendar } from './views/calendar.js';
 import { renderGoods } from './views/goods.js';
 import { renderLives } from './views/lives.js';
 import { renderSettings } from './views/settings.js';
 import { renderMoney } from './views/money.js';
+import { renderHome } from './views/home.js';
 
 const VIEWS = {
+  home: { title: 'ホーム', render: renderHome, chips: false },
   calendar: { title: 'カレンダー', render: renderCalendar, chips: true },
   goods: { title: 'グッズ', render: renderGoods, chips: true },
   lives: { title: '参戦記録', render: renderLives, chips: true },
@@ -24,10 +27,10 @@ const ls = {
 };
 
 const app = {
-  tab: ls.get('tab', 'calendar'),
+  tab: ls.get('tab', 'home'),
   sel: ls.get('sel', { group: null, member: null }),
 };
-if (!VIEWS[app.tab]) app.tab = 'calendar';
+if (!VIEWS[app.tab]) app.tab = 'home';
 
 let fabAction = null;
 const ctx = {
@@ -53,6 +56,11 @@ function render(opts = {}) {
   if (opts.fromStore && main.contains(a) && /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName) && a.type !== 'checkbox') {
     pending = true;
     renderStatus();
+    return;
+  }
+  if (opts.fromStore && isDrawing()) { // 手書きの途中なら、書き終わってから描き直す
+    renderStatus();
+    setTimeout(() => render(opts), 400);
     return;
   }
   pending = false;
@@ -119,10 +127,13 @@ document.querySelectorAll('.tabbar [data-tab]').forEach((b) => b.onclick = () =>
 });
 
 let raf = 0;
-subscribe(() => {
+subscribe((kind) => {
+  if (kind === 'ink') { renderStatus(); return; } // 手書きは各キャンバスが自分で描き直す
   cancelAnimationFrame(raf);
   raf = requestAnimationFrame(() => render({ fromStore: true }));
 });
+// iPadの縦横の切り替えなどで「広い画面」かどうかが変わったら描き直す
+window.matchMedia('(min-width: 760px)').addEventListener('change', () => render());
 onNotice(toast);
 
 window.addEventListener('online', () => { renderStatus(); sync(); });

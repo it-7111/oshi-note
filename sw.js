@@ -1,12 +1,13 @@
 // オフライン用：アプリのファイルを端末にキャッシュする。
 // ファイルを更新したら VERSION を上げる（次回起動時に新しい版へ切り替わる）。
-const VERSION = 'v0.2.0';
+const VERSION = 'v0.3.0';
 const CACHE = `oshi-app-${VERSION}`;
 const FILES = [
   './', 'index.html', 'manifest.webmanifest', 'css/app.css',
   'js/app.js', 'js/store.js', 'js/db.js', 'js/util.js', 'js/ui.js', 'js/oshi.js', 'js/demo.js',
   'js/views/calendar.js', 'js/views/goods.js', 'js/views/lives.js', 'js/views/settings.js',
-  'js/views/trade.js', 'js/views/money.js', 'js/views/oshi-edit.js', 'js/views/notify.js',
+  'js/views/trade.js', 'js/views/money.js', 'js/views/oshi-edit.js', 'js/views/notify.js', 'js/views/home.js',
+  'js/plans.js', 'js/ink.js', 'js/memo.js',
   'icons/icon-192.png', 'icons/icon-512.png', 'icons/apple-touch-icon.png',
 ];
 

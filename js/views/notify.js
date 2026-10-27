@@ -4,15 +4,16 @@ import { esc, today, addDays, fmtMD, fromMin } from '../util.js';
 import { toast } from '../ui.js';
 import { buildItems } from './calendar.js';
 
-const DEFAULT = { enabled: false, calendarName: '推し活', days: 60, rules: { 配信: 15, ライブ: 120, リリース: 0, 締切: 1440, 誕生日: 180 } };
+const DEFAULT = { enabled: false, calendarName: '推し活', days: 60, rules: { 配信: 15, ライブ: 120, リリース: 0, 締切: 1440, 誕生日: 180, アーカイブ: 180 } };
 const TIMED = [[-1, '通知しない'], [0, '開始時'], [5, '5分前'], [15, '15分前'], [30, '30分前'], [60, '1時間前'], [120, '2時間前'], [180, '3時間前'], [1440, '1日前'], [2880, '2日前'], [10080, '1週間前']];
 const ALLDAY = [[-1, '通知しない'], [0, '当日0時'], [180, '前日21時'], [720, '前日12時'], [900, '前日9時'], [1620, '2日前21時'], [10080, '1週間前']];
 const RULES = [
   ['配信', '📺 配信', TIMED],
   ['ライブ', '🎤 ライブ・参戦（当選／申込中）', TIMED],
   ['リリース', '💿 リリース', TIMED],
-  ['締切', '📝 申込・入金締切／当落発表', TIMED],
+  ['締切', '📝 申込・入金・発券／当落発表', TIMED],
   ['誕生日', '🎂 誕生日・周年', ALLDAY],
+  ['アーカイブ', '⏳ アーカイブの視聴期限（まだ見ていないもの）', ALLDAY],
 ];
 
 export const notifyConfig = () => {

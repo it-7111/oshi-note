@@ -1,4 +1,4 @@
-import { state, isDemo, saveSettings, sync, ping, resetDemo, clearFailed, exportJson, importJson } from '../store.js';
+import { state, isDemo, saveSettings, sync, ping, resetDemo, clearFailed, exportJson, importJson, resolveConflict } from '../store.js';
 import { groups, membersOf } from '../oshi.js';
 import { esc } from '../util.js';
 import { toast } from '../ui.js';
@@ -6,6 +6,36 @@ import { openOshiEditor } from './oshi-edit.js';
 import { notifyHtml, bindNotify } from './notify.js';
 
 const OP_LABEL = { 'goods.delta': '所持数', 'goods.update': 'グッズ編集', 'goods.create': 'グッズ追加', 'goods.image': '画像', 'row.upsert': '予定・参戦・推しなど' };
+
+const TABLE_LABEL = { Memos: 'メモ', Events: '予定', Lives: '参戦記録', Oshi: '推し', Expenses: '支出', Savings: '貯金', Config: '設定' };
+const FIELD_LABEL = { Text: '本文', Title: 'タイトル', Memo: 'メモ', Deleted: '削除', Want: '欲しい数', Trade: '譲れる数', Name: '名前', Watched: '視聴済み', Checklist: '持ち物', TravelMemo: '遠征メモ' };
+
+function rowName(c) {
+  if (c.Table === 'Memos') return c.RowID.startsWith('week:') ? `${c.RowID.slice(5)}の週のメモ` : `${c.RowID.slice(6)}のメモ`;
+  const map = { Events: ['events', 'EventID', 'Title'], Lives: ['lives', 'LiveID', 'Title'], Oshi: ['oshi', 'OshiID', 'Name'], Expenses: ['expenses', 'ExpenseID', 'Memo'] }[c.Table];
+  if (map) return state.data[map[0]].find((r) => r[map[1]] === c.RowID)?.[map[2]] || c.RowID;
+  const g = state.data.goods.find((x) => x.Sheet === c.Table && x.ID === c.RowID);
+  return g ? g.Name : c.RowID;
+}
+
+/** 2台で同じ項目を変えたときの記録。どちらの内容にするか選べる */
+function conflictsHtml() {
+  const list = state.data.conflicts;
+  if (!list.length) return '';
+  const cut = (v) => (String(v).length > 120 ? `${String(v).slice(0, 120)}…` : String(v));
+  return `<section class="card section">
+    <h2>⚠ 競合 ${list.length}件</h2>
+    <p class="small muted">2台で同じ項目を変えたため、後に編集した方を採用しました。もう一方の内容に戻すこともできます。</p>
+    ${list.map((c) => `<div class="conflict-card">
+      <div class="small"><b>${esc(TABLE_LABEL[c.Table] || 'グッズ')}「${esc(rowName(c))}」の${esc(FIELD_LABEL[c.Field] || c.Field)}</b>
+        <span class="muted">${c.At ? new Date(c.At).toLocaleString('ja-JP') : ''}</span></div>
+      <div class="cf-vals"><div><span class="small muted">今の内容</span><pre>${esc(cut(c.KeptValue)) || '（空）'}</pre></div>
+        <div><span class="small muted">もう一方${c.OtherDevice ? `（${esc(c.OtherDevice)}）` : ''}</span><pre>${esc(cut(c.OtherValue)) || '（空）'}</pre></div></div>
+      <div class="row"><button type="button" class="btn sm" data-cf="${esc(c.ConflictID)}" data-use="other">もう一方に戻す</button><span class="spacer"></span>
+        <button type="button" class="btn sm primary" data-cf="${esc(c.ConflictID)}" data-use="kept">このままでよい</button></div>
+    </div>`).join('')}
+  </section>`;
+}
 
 export function renderSettings(main, ctx) {
   const s = state.settings;
@@ -33,6 +63,8 @@ export function renderSettings(main, ctx) {
           <button type="button" class="btn sm" data-clear-failed>一覧を消す</button>
         </details>` : ''}
     </section>
+
+    ${conflictsHtml()}
 
     <section class="card section">
       <h2>GASとの接続</h2>
@@ -69,7 +101,7 @@ export function renderSettings(main, ctx) {
       </div>
       <p class="small muted">端末の保存領域：${state.persisted === true ? '保護済み（自動では消されません）' : state.persisted === false ? '未保護。ホーム画面に追加して使うと消されにくくなります' : '確認できません'}</p>
     </section>
-    <p class="small muted" style="text-align:center">推し活ノート v0.2</p>`;
+    <p class="small muted" style="text-align:center">推し活ノート v0.3</p>`;
 
   main.querySelector('[data-sync]')?.addEventListener('click', () => sync());
   const oshiMap = new Map(state.data.oshi.map((o) => [o.OshiID, o]));
@@ -77,6 +109,12 @@ export function renderSettings(main, ctx) {
   main.querySelectorAll('[data-add-member]').forEach((b) => b.onclick = () => openOshiEditor(null, { Type: 'member', ParentID: b.dataset.addMember }));
   main.querySelector('[data-add-group]').onclick = () => openOshiEditor(null, { Type: 'group' });
   bindNotify(main);
+  main.querySelectorAll('[data-cf]').forEach((b) => b.onclick = async () => {
+    const c = state.data.conflicts.find((x) => x.ConflictID === b.dataset.cf);
+    if (!c) return;
+    await resolveConflict(c, b.dataset.use === 'other');
+    toast(b.dataset.use === 'other' ? 'もう一方の内容に戻しました' : '今の内容のままにしました');
+  });
   main.querySelector('[data-clear-failed]')?.addEventListener('click', () => clearFailed());
   const conn = () => ({
     gasUrl: main.querySelector('[name=gasUrl]').value.trim(),

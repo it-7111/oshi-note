@@ -3,6 +3,9 @@ import { groups, membersOf, oshiById, colorOf, nameOf, matchesSel, isVisible } f
 import { esc, today, addDays, addMonths, parseYmd, ymd, fmtMD, WD, weekday, toMin, fromMin, pad, uid, isValidYmd } from '../util.js';
 import { openModal, closeModal, toast, formValues, field, input, select } from '../ui.js';
 import { openLiveEditor } from './lives.js';
+import { liveSteps, archiveExpiry, watchedSet } from '../plans.js';
+import { mountInk, gridMapping, toolbarHtml, bindToolbar } from '../ink.js';
+import { weekKey, monthKey, hasMemo, isWide, memoPanelHtml, bindMemoPanel, openMemoViewer } from '../memo.js';
 
 const HOUR_H = 44;
 const DEADLINE_KINDS = ['申込締切', '入金締切', '当落発表'];
@@ -20,7 +23,7 @@ function saveUi() {
 
 // ───────── 表示する項目を作る ─────────
 
-function occurrences(start, repeat, from, to) {
+export function occurrences(start, repeat, from, to) {
   if (!isValidYmd(start)) return [];
   const out = [];
   if (!repeat || repeat === 'none') {
@@ -84,6 +87,24 @@ export function buildItems(from, to, sel) {
     if (!show(l.OshiID) || !(l.Date >= from && l.Date <= to)) continue;
     push({ key: `lv:${l.LiveID}`, src: 'live', ref: l, date: l.Date, startT: l.Start || l.Open, defaultDur: 180, title: `🎤${l.Title}`, color: colorOf(l.OshiID) });
   }
+  // 申込締切・当落発表・入金締切・発券
+  for (const l of d.lives) {
+    if (!show(l.OshiID)) continue;
+    for (const st of liveSteps(l)) {
+      if (st.date < from || st.date > to) continue;
+      push({ key: `ls:${l.LiveID}:${st.kind}`, src: 'live', ref: l, date: st.date, startT: st.time, allDayHint: true, title: `${st.label}${st.time ? ` ${st.time}` : ''} ${l.Title}`, color: colorOf(l.OshiID) });
+    }
+  }
+  // 配信アーカイブの視聴期限（まだ見ていないもの）
+  for (const e of d.events) {
+    if (!show(e.OshiID) || (!e.ArchiveDays && !e.ArchiveUntil)) continue;
+    const w = watchedSet(e);
+    for (const od of occurrences(e.Date, e.Repeat, addDays(from, -120), to < today() ? to : today())) { // 配信済みの回だけ
+      const exp = archiveExpiry(e, od);
+      if (!exp || exp === '∞' || exp < from || exp > to || w.has(od)) continue;
+      push({ key: `ar:${e.EventID}:${od}`, src: 'event', ref: e, date: exp, occ: od, allDayHint: true, title: `⏳アーカイブ期限 ${e.Title}`, color: colorOf(e.OshiID) });
+    }
+  }
   for (const o of d.oshi) {
     if (!show(o.OshiID)) continue;
     for (const date of yearly(String(o.Birthday || '').slice(-5), from, to)) {
@@ -124,17 +145,32 @@ export function buildItems(from, to, sel) {
 
 // ───────── 描画 ─────────
 
+/** 今表示している期間の週メモ・月メモ */
+function currentMemos() {
+  const wk = weekStartOf(ui.cursor);
+  const ym = ui.cursor.slice(0, 7);
+  const month = { key: monthKey(ym), title: `${Number(ym.slice(5))}月のメモ` };
+  if (ui.view === 'month') return [month];
+  return [{ key: weekKey(wk), title: `週のメモ（${fmtMD(wk)}〜）` }, month];
+}
+
 export function renderCalendar(main, ctx) {
   const t = today();
+  const wide = isWide();
+  const memos = currentMemos();
+  const memoDot = memos.some((m) => hasMemo(m.key));
   let html = `
-    <div class="row" style="margin:2px 0 8px">
+    <div class="row" style="margin:2px 0 8px;flex-wrap:wrap">
       <div class="seg" role="group" aria-label="表示形式">
         ${[['day', '日'], ['week', '週'], ['month', '月']].map(([v, l]) => `<button type="button" data-view="${v}" aria-pressed="${ui.view === v}">${l}</button>`).join('')}
       </div>
       <span class="spacer"></span>
+      ${wide ? '' : `<button type="button" class="btn sm memo-btn ${memoDot ? 'has' : ''}" data-memo-open aria-label="メモを見る">📝${memoDot ? '<i></i>' : ''}</button>`}
       <button type="button" class="btn sm" data-today>今日</button>
       <button type="button" class="btn sm" data-layers>表示 ▾</button>
-    </div>`;
+    </div>
+    ${wide ? toolbarHtml() : ''}
+    <div class="cal-layout"><div class="cal-main">`;
 
   if (ui.view === 'month') html += monthHtml(ctx.sel, t);
   else html += gridHtml(ui.view === 'week' ? 7 : 1, ctx.sel, t);
@@ -142,8 +178,19 @@ export function renderCalendar(main, ctx) {
   html += `<div class="legend">
     <span><i style="background:var(--mine-bg);border-left:3px solid var(--mine)"></i>自分の予定</span>
     <span><i style="background:transparent;outline:2px solid var(--danger)"></i>重なり</span>
-    <span>📝締切 📺配信 🎤ライブ 🎂誕生日</span></div>`;
+    <span>📝締切 📺配信 🎤ライブ 🎂誕生日 ⏳アーカイブ期限</span>
+    ${ui.view === 'day' ? '<span>手書きは週表示で見られます</span>' : ''}</div></div>
+    ${wide ? `<aside class="memo-side">${memoPanelHtml(memos, true)}</aside>` : ''}</div>`;
   main.innerHTML = html;
+
+  if (wide) {
+    bindToolbar(main, () => ctx.rerender());
+    bindMemoPanel(main, true);
+  } else {
+    main.querySelector('[data-memo-open]').onclick = () => openMemoViewer(memos);
+  }
+  const inkCanvas = main.querySelector('.ink-layer');
+  if (inkCanvas) mountInk(inkCanvas, gridMapping(weekStartOf(ui.cursor), 7, HOUR_H), { editable: wide });
 
   main.querySelectorAll('[data-view]').forEach((b) => b.onclick = () => { ui.view = b.dataset.view; ui.scroll = null; saveUi(); ctx.rerender(); });
   main.querySelector('[data-today]').onclick = () => { ui.cursor = today(); ui.scroll = null; saveUi(); ctx.rerender(); };
@@ -251,6 +298,8 @@ function gridHtml(days, sel, t) {
     if (d === t) html += `<div class="nowline" style="top:${((now.getHours() * 60 + now.getMinutes()) / 60) * HOUR_H}px"></div>`;
     html += '</div>';
   }
+  // 週表示では時間軸の上に手書きの層を重ねる（あいまいな予定はここに書く）
+  if (days === 7) html += `<canvas class="ink-layer" style="height:${24 * HOUR_H}px" aria-label="週の手書き"></canvas>`;
   return html + '</div></div></div>';
 }
 
@@ -325,6 +374,9 @@ function openItem(key, ctx) {
 
 function openEventDetail(it, ctx) {
   const e = it.ref;
+  const occ = it.occ || it.date; // アーカイブ期限の項目なら元の配信日
+  const exp = archiveExpiry(e, occ);
+  const watched = watchedSet(e).has(occ);
   const rep = REPEAT.find((r) => r[0] === e.Repeat)?.[1];
   const rows = [
     ['推し', nameOf(e.OshiID)], ['種類', e.Kind], ['日付', fmtMD(it.date)],
@@ -334,13 +386,27 @@ function openEventDetail(it, ctx) {
     title: it.title,
     body: `<dl class="kv">${rows.filter((r) => r[1]).map(([k, v]) => `<dt>${k}</dt><dd>${esc(v)}</dd>`).join('')}
       ${e.URL ? `<dt>URL</dt><dd><a href="${esc(e.URL)}" target="_blank" rel="noopener">${esc(e.URL)}</a></dd>` : ''}</dl>
-      ${it.conflict ? '<p class="small" style="color:var(--danger)">⚠ 自分の予定と重なっています</p>' : ''}`,
+      ${it.conflict ? '<p class="small" style="color:var(--danger)">⚠ 自分の予定と重なっています</p>' : ''}
+      ${exp ? `<div class="row card" style="padding:10px 12px;margin-top:10px">
+        <span class="small">⏳ アーカイブ（${fmtMD(occ)}配信分）：${exp === '∞' ? '期限なし' : `${fmtMD(exp)}まで`}</span><span class="spacer"></span>
+        <button type="button" class="btn sm ${watched ? '' : 'primary'}" data-watch>${watched ? '✓ 見た' : '見た'}</button></div>` : ''}`,
     foot: `<button type="button" class="btn" data-live>参戦記録を作る</button><span class="spacer"></span><button type="button" class="btn primary" data-edit>編集</button>`,
     onMount: (m) => {
+      m.querySelector('[data-watch]')?.addEventListener('click', async () => {
+        await toggleWatched(e, occ);
+        closeModal();
+        toast(watched ? '「まだ」に戻しました' : '見たにしました');
+      });
       m.querySelector('[data-edit]').onclick = () => openEventEditor(e, ctx);
       m.querySelector('[data-live]').onclick = () => openLiveEditor(null, ctx, { OshiID: e.OshiID, Date: it.date, Start: e.Start, Title: e.Title });
     },
   });
+}
+
+export function toggleWatched(e, occ) {
+  const w = watchedSet(e);
+  w.has(occ) ? w.delete(occ) : w.add(occ);
+  return upsertRow('Events', { ...e, Watched: [...w].sort().join(',') });
 }
 
 export function oshiOptions() {
@@ -349,7 +415,8 @@ export function oshiOptions() {
 
 export function openEventEditor(e, ctx, date = today()) {
   const isNew = !e;
-  const row = e || { EventID: uid('e'), OshiID: ctx.sel.member || ctx.sel.group || groups()[0]?.OshiID || '', Kind: '配信', Title: '', Date: date, Start: '', End: '', Repeat: 'none', URL: '', Memo: '' };
+  const row = e || { EventID: uid('e'), OshiID: ctx.sel.member || ctx.sel.group || groups()[0]?.OshiID || '', Kind: '配信', Title: '', Date: date, Start: '', End: '', Repeat: 'none', URL: '', Memo: '', ArchiveDays: '', ArchiveUntil: '', Watched: '' };
+  const archMode = row.ArchiveUntil ? 'until' : row.ArchiveDays === '-1' ? 'unlimited' : row.ArchiveDays ? 'days' : '';
   openModal({
     title: isNew ? '予定を追加' : '予定を編集',
     body: `
@@ -360,19 +427,32 @@ export function openEventEditor(e, ctx, date = today()) {
       ${field('日付', input('Date', row.Date, 'type="date" required'))}
       <div class="fields-2">${field('開始', input('Start', row.Start, 'type="time"'))}${field('終了', input('End', row.End, 'type="time"'))}</div>
       ${field('URL', input('URL', row.URL, 'type="url" inputmode="url"'))}
+      <div class="fields-2">
+        ${field('アーカイブ', select('ArchiveMode', [['', 'なし'], ['days', '配信から○日'], ['until', '日付で指定'], ['unlimited', '期限なし']], archMode))}
+        <div data-arch-days ${archMode === 'days' ? '' : 'hidden'}>${field('日数', input('ArchiveDays', archMode === 'days' ? row.ArchiveDays : '7', 'type="number" inputmode="numeric" min="0"'))}</div>
+        <div data-arch-until ${archMode === 'until' ? '' : 'hidden'}>${field('期限', input('ArchiveUntil', row.ArchiveUntil, 'type="date"'))}</div>
+      </div>
       ${field('メモ', `<textarea name="Memo">${esc(row.Memo)}</textarea>`)}`,
     foot: `${isNew ? '' : '<button type="button" class="btn danger" data-del>削除</button>'}<span class="spacer"></span><button type="button" class="btn primary" data-save>保存</button>`,
     onMount: (m) => {
+      const modeSel = m.querySelector('[name=ArchiveMode]');
+      modeSel.onchange = () => {
+        m.querySelector('[data-arch-days]').hidden = modeSel.value !== 'days';
+        m.querySelector('[data-arch-until]').hidden = modeSel.value !== 'until';
+      };
       m.querySelector('[data-save]').onclick = async () => {
-        const v = formValues(m);
+        const { ArchiveMode, ...v } = formValues(m);
         if (!v.Title || !isValidYmd(v.Date)) return toast('タイトルと日付を入れてください');
-        await upsertRow('Events', { ...row, ...v }, e?.UpdatedAt || '');
+        v.ArchiveDays = ArchiveMode === 'days' ? String(Math.max(0, Number(v.ArchiveDays) || 0)) : ArchiveMode === 'unlimited' ? '-1' : '';
+        v.ArchiveUntil = ArchiveMode === 'until' ? v.ArchiveUntil : '';
+        if (ArchiveMode === 'until' && !isValidYmd(v.ArchiveUntil)) return toast('アーカイブの期限を入れてください');
+        await upsertRow('Events', { ...row, ...v });
         closeModal();
         toast('保存しました');
       };
       m.querySelector('[data-del]')?.addEventListener('click', async () => {
         if (!confirm(`「${row.Title}」を削除しますか？${row.Repeat !== 'none' ? '（繰り返しの予定はすべて消えます）' : ''}`)) return;
-        await upsertRow('Events', { ...row, Deleted: true }, e?.UpdatedAt || '');
+        await upsertRow('Events', { ...row, Deleted: true });
         closeModal();
         toast('削除しました');
       });
